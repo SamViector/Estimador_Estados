@@ -1,6 +1,7 @@
 import numpy as np
 import pandapower as pp
 
+
 def simular_medidor(valor_real, desvio_padrao):
     """
     Função inteligente para adicionar ruído Gaussiano ao valor verdadeiro.
