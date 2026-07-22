@@ -39,10 +39,43 @@ def main():
         
         # Filtro Qui-Quadrado (Módulo de Verificação)
         tem_erro_grosseiro = chi2_analysis(net, chi2_prob_false=0.05)
+        
         if not tem_erro_grosseiro:
             print("✅ Verificação Aprovada: O Teste Qui-Quadrado (X²) não detetou erros.")
+        else:
+            from pandapower.estimation import remove_bad_data
             
-        # Exibe a tabela comparativa Final
+            print("🚨 ALARME: O Teste Qui-Quadrado (X²) detetou a presença de Erros Grosseiros!")
+            print("-> A iniciar a identificação da medida corrompida (Teste LNR)...")
+            
+            # 1. Tira uma "fotografia" das medidas antes da limpeza
+            medidas_antes = net.measurement.copy()
+            indices_antes = set(medidas_antes.index)
+            
+            # 2. Executa a purga (O pandapower vai apagar a linha do medidor defeituoso)
+            sucesso_purga = remove_bad_data(net, init="flat", rn_max_threshold=3.0)
+            
+            if sucesso_purga:
+                # 3. Descobre qual foi o índice apagado
+                indices_depois = set(net.measurement.index)
+                indices_removidos = indices_antes - indices_depois
+                
+                print("✅ SUCESSO: O algoritmo isolou e removeu a(s) seguinte(s) medida(s):")
+                
+                # 4. Imprime os detalhes exatos do medidor sabotado
+                for idx in indices_removidos:
+                    medida_ruim = medidas_antes.loc[idx]
+                    nome = medida_ruim.get('name', f"Medidor {idx}")
+                    tipo = medida_ruim['measurement_type']
+                    valor_falso = medida_ruim['value']
+                    
+                    print(f"   ❌ [REMOVIDA] {nome} | Grandeza: '{tipo}' | Valor Lido: {valor_falso} pu")
+                
+                print("\n-> O Estado da rede foi recalculado automaticamente de forma segura.\n")
+            else:
+                print("❌ FALHA CRÍTICA: Erro detetado, mas não houve redundância suficiente para o isolar.\n")
+            
+        # Exibe a tabela comparativa Final (Módulos e Ângulos)
         exibir_tabelas_comparacao(net)
 
         # EXIBE A NOVA TABELA COMPLETA DE RESÍDUOS E GRANDEZAS
