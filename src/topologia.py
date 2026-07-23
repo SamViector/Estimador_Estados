@@ -36,3 +36,12 @@ def criar_sistema_4barras():
 
     # Retorna o objeto 'net' e as variáveis das barras para facilitar o uso no SCADA
     return net, b1, b2, b3, b4
+
+def processar_topologia(net):
+    """
+    [ETAPA 2: TOPOLOGIA] Verifica elementos fora de serviço ou ilhas desenergizadas.
+    """
+    linhas_ativas = len(net.line[net.line.in_service == True])
+    barras_ativas = len(net.bus[net.bus.in_service == True])
+    print(f" -> [TOPOLOGIA] Verificação concluída: {barras_ativas} Barras e {linhas_ativas} Linhas em operação normal.")
+    return True

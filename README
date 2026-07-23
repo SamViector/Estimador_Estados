@@ -1,0 +1,11 @@
+meu_tcc_estimador/
+├── src/
+│   ├── __init__.py
+│   ├── topologia.py        # 1. Criação da rede e verificação topológica
+│   ├── scada.py            # 2. Geração de medidas e Pré-Filtragem (Outliers brutais)
+│   ├── observabilidade.py  # 3. Análise numérica e redundância (M >= 2N-1)
+│   ├── estimador.py        # 4. Motor WLS, Teste Qui-Quadrado e Expurgo LNR
+│   └── relatorios.py       # 5. Formatadores visuais e tabelas Pandas
+├── cenarios/
+│   └── simulacao_completa.py # Script mestre que executa o pipeline EMS
+└── requirements.txt
