@@ -7,7 +7,7 @@ from src.topologia import criar_sistema_4barras, processar_topologia
 from src.scada import instalar_medidas_scada, pre_filtrar_medidas
 from src.observabilidade import analisar_observabilidade
 from src.estimador import executar_pipeline_wls
-from src.relatorios import exibir_quadro_medidas, exibir_comparacao_finais
+from src.relatorios import exibir_quadro_medidas, exibir_comparacao_finais, exibir_tabelas_comparacao_estados, exibir_tabela_residuos
 
 # Suprime SettingWithCopyWarning do pandapower
 warnings.filterwarnings("ignore", message=".*SettingWithCopyWarning.*")
@@ -23,10 +23,10 @@ def main():
     processar_topologia(net)
     instalar_medidas_scada(net)
 
-    # Injeção de Erro Grosseiro Proposital para Teste (Sabotagem V2 = 0.50 pu)
+    """ # Injeção de Erro Grosseiro Proposital para Teste (Sabotagem V2 = 0.50 pu)
     print("\n[SIMULAÇÃO] 🚨 Injetando erro grosseiro severo no medidor V2 (0.50 pu)...")
     net.measurement.loc[(net.measurement.element == 1) & (net.measurement.measurement_type == 'v'), 'value'] = 0.50
-
+    """
     # 2. Pré-filtro e Tabela SCADA
     pre_filtrar_medidas(net)
     exibir_quadro_medidas(net)
@@ -40,6 +40,8 @@ def main():
         sucesso = executar_pipeline_wls(net, limiar_lnr=3.5)
         if sucesso:
             exibir_comparacao_finais(net)
+            exibir_tabelas_comparacao_estados(net)
+            exibir_tabela_residuos(net)
     print("\n=================================================================")
     print(" SIMULAÇÃO FINALIZADA")
     print("=================================================================")
