@@ -10,14 +10,13 @@ from src.sistema_eletrico import criar_sistema_4barras
 from src.medidas import adicionar_medidas_base
 
 # Importe a nova função de resíduos aqui!
-from src.tabelas import exibir_tabela_medidas,exibir_tabelas_comparacao, exibir_tabela_residuos
-
+from src.tabelas import exibir_tabela_medidas, exibir_tabelas_comparacao, exibir_tabela_residuos, obter_medida_maior_erro, remove_bad_data
 pd.options.mode.chained_assignment = None
 warnings.filterwarnings("ignore", module="pandapower")
 
 def main():
     print("=========================================================")
-    print("  CENÁRIO 2: ESTIMADOR WLS COM SCADA NORMAL (SEM FALHAS) ")
+    print("  CENÁRIO 1: ESTIMADOR WLS COM SCADA NORMAL (SEM FALHAS) ")
     print("=========================================================\n")
     
     # 1. Cria a rede elétrica
@@ -35,50 +34,60 @@ def main():
     sucesso = estimate(net, init="flat")
     
     if sucesso:
-        print("✅ Estimação convergida com sucesso!\n")
+        print("✅ Estimação WLS convergida com sucesso!\n")
         
-        # Filtro Qui-Quadrado (Módulo de Verificação)
+        # 1. IDENTIFICAÇÃO PRÉVIA DA MEDIDA COM MAIOR ERRO
+        pior_medida = obter_medida_maior_erro(net)
+        
+        print("="*75)
+        print(" 🔍 DIAGNÓSTICO DE RESÍDUOS DO ESTIMADOR WLS")
+        print("="*75)
+        print(f" -> Medida com Maior Resíduo Ponderado: {pior_medida['nome']}")
+        print(f" -> Valor Mensurado (z) : {pior_medida['valor_z']:.5f} pu")
+        print(f" -> Valor Estimado h(x) : {pior_medida['estimado_hx']:.5f} pu")
+        print(f" -> Resíduo Bruto |z-h|  : {pior_medida['residuo_bruto']:.5f} pu")
+        print(f" -> Resíduo Ponderado   : {pior_medida['residuo_ponderado']:.2f} sigmas (σ={pior_medida['std_dev']})")
+        print("="*75 + "\n")
+
+        # 2. Teste Qui-Quadrado
         tem_erro_grosseiro = chi2_analysis(net, chi2_prob_false=0.05)
         
         if not tem_erro_grosseiro:
-            print("✅ Verificação Aprovada: O Teste Qui-Quadrado (X²) não detetou erros.")
+            print("✅ Verificação Aprovada: O Teste Qui-Quadrado (X²) não detetou erros grosseiros.")
         else:
-            from pandapower.estimation import remove_bad_data
-            
             print("🚨 ALARME: O Teste Qui-Quadrado (X²) detetou a presença de Erros Grosseiros!")
-            print("-> A iniciar a identificação da medida corrompida (Teste LNR)...")
+            print("-> A iniciar tentativa de remoção da medida defeituosa (LNR)...\n")
             
-            # 1. Tira uma "fotografia" das medidas antes da limpeza
             medidas_antes = net.measurement.copy()
             indices_antes = set(medidas_antes.index)
             
-            # 2. Executa a purga (O pandapower vai apagar a linha do medidor defeituoso)
-            sucesso_purga = remove_bad_data(net, init="flat", rn_max_threshold=3.0)
-            
-            if sucesso_purga:
-                # 3. Descobre qual foi o índice apagado
-                indices_depois = set(net.measurement.index)
-                indices_removidos = indices_antes - indices_depois
+            # 3. BLINDAGEM DE SEGURANÇA (TRY / EXCEPT)
+            try:
+                sucesso_purga = remove_bad_data(net, init="flat", rn_max_threshold=3.0)
                 
-                print("✅ SUCESSO: O algoritmo isolou e removeu a(s) seguinte(s) medida(s):")
-                
-                # 4. Imprime os detalhes exatos do medidor sabotado
-                for idx in indices_removidos:
-                    medida_ruim = medidas_antes.loc[idx]
-                    nome = medida_ruim.get('name', f"Medidor {idx}")
-                    tipo = medida_ruim['measurement_type']
-                    valor_falso = medida_ruim['value']
+                if sucesso_purga:
+                    indices_depois = set(net.measurement.index)
+                    indices_removidos = indices_antes - indices_depois
                     
-                    print(f"   ❌ [REMOVIDA] {nome} | Grandeza: '{tipo}' | Valor Lido: {valor_falso} pu")
-                
-                print("\n-> O Estado da rede foi recalculado automaticamente de forma segura.\n")
-            else:
-                print("❌ FALHA CRÍTICA: Erro detetado, mas não houve redundância suficiente para o isolar.\n")
-            
-        # Exibe a tabela comparativa Final (Módulos e Ângulos)
-        exibir_tabelas_comparacao(net)
+                    print("✅ SUCESSO NA PURGA: Medida(s) isolada(s) e removida(s):")
+                    for idx in indices_removidos:
+                        medida_ruim = medidas_antes.loc[idx]
+                        print(f"   ❌ [REMOVIDA] Medidor ID {idx} | Tipo: '{medida_ruim['measurement_type']}' | Valor: {medida_ruim['value']:.5f} pu")
+                    print("\n-> O Estado da rede foi recalculado automaticamente com sucesso.\n")
+                else:
+                    print("❌ FALHA: Erro detetado, mas o LNR não convergiu para uma remoção limpa.\n")
+                    
+            except Exception as erro:
+                print("!"*75)
+                print(" 🚨 ALERTA: NÃO FOI POSSÍVEL PURGAR A MEDIDA (PERDA DE OBSERVABILIDADE)")
+                print("!"*75)
+                print(f" -> Culpado Identificado pelo Diagnóstico : {pior_medida['nome']}")
+                print(" -> Causa Numérica do Colapso            : A medida expurgada é uma MEDIDA CRÍTICA.")
+                print("    Removê-la reduz o total de equações abaixo do mínimo necessário (7 medidas).")
+                print(f" -> Detalhe técnico do pandapower        : {erro}\n")
 
-        # EXIBE A NOVA TABELA COMPLETA DE RESÍDUOS E GRANDEZAS
+        # Exibe as tabelas comparativas
+        exibir_tabelas_comparacao(net)
         exibir_tabela_residuos(net)
         
     else:

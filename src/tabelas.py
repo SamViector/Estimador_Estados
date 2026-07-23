@@ -1,4 +1,5 @@
 import pandas as pd
+from pandapower.estimation import estimate, chi2_analysis
 
 def exibir_tabela_medidas(net):
     """
@@ -157,3 +158,143 @@ def exibir_tabela_residuos(net):
     pd.options.display.float_format = '{:.5f}'.format
     print(df_residuos.to_string(index=False))
     pd.reset_option('display.float_format')
+
+
+def obter_medida_maior_erro(net):
+    """
+    Varre todas as medições ativas, calcula o resíduo bruto |z - h(x)| 
+    e o resíduo ponderado |z - h(x)| / std_dev, retornando a medida 
+    com o maior desvio em relação ao modelo elétrico.
+    """
+    maior_residuo_ponderado = -1.0
+    medida_campea = None
+
+    for idx, row in net.measurement.iterrows():
+        m_type = row['measurement_type']
+        e_type = row['element_type']
+        element = row['element']
+        val_z = row['value']
+        std_dev = row['std_dev']
+
+        # Extrai h(x) estimado do WLS
+        if e_type == "bus":
+            nome_elem = net.bus.at[element, 'name'][:7]
+            if m_type == "v":
+                h_val = net.res_bus_est.at[element, 'vm_pu']
+                nome = f"Tensão (V) - {nome_elem}"
+            elif m_type == "p":
+                h_val = -net.res_bus_est.at[element, 'p_mw']
+                nome = f"Injeção Ativa (P) - {nome_elem}"
+            elif m_type == "q":
+                h_val = -net.res_bus_est.at[element, 'q_mvar']
+                nome = f"Injeção Reat. (Q) - {nome_elem}"
+
+        elif e_type == "line":
+            nome_elem = net.line.at[element, 'name']
+            side = row['side']
+            if m_type == "p":
+                h_val = net.res_line_est.at[element, f'p_{side}_mw']
+                nome = f"Fluxo Ativo (P) - {nome_elem}"
+            elif m_type == "q":
+                h_val = net.res_line_est.at[element, f'q_{side}_mvar']
+                nome = f"Fluxo Reat. (Q) - {nome_elem}"
+
+        # Resíduo Bruto r = |z - h(x)|
+        r_bruto = abs(val_z - h_val)
+        
+        # Resíduo Ponderado r_w = |z - h(x)| / sigma
+        r_ponderado = r_bruto / std_dev
+
+        if r_ponderado > maior_residuo_ponderado:
+            maior_residuo_ponderado = r_ponderado
+            medida_campea = {
+                'id': idx,
+                'nome': nome,
+                'tipo': m_type,
+                'valor_z': val_z,
+                'estimado_hx': h_val,
+                'residuo_bruto': r_bruto,
+                'residuo_ponderado': r_ponderado,
+                'std_dev': std_dev
+            }
+
+    return medida_campea
+
+
+def remove_bad_data(net, init="flat", rn_max_threshold=3.0):
+    """
+    Implementa o algoritmo LNR (Largest Normalized Residual) para detecção 
+    e remoção iterativa de erros grosseiros em medições.
+    
+    O algoritmo:
+    1. Executa estimação WLS
+    2. Calcula resíduos normalizados para todas as medições
+    3. Remove a medida com maior resíduo normalizado (se > threshold)
+    4. Re-estima e repete até passar no χ² ou não haver mais medidas
+    
+    Parâmetros:
+    -----------
+    net : pandapower network
+        Rede elétrica com medições
+    init : str
+        Inicialização do algoritmo WLS ("flat" ou "dc")
+    rn_max_threshold : float
+        Limiar para remover uma medida (em sigmas). Padrão: 3.0
+    
+    Retorna:
+    --------
+    bool
+        True se convergiu sem erros, False se falhou (perda de observabilidade)
+    """
+    
+    MAX_ITERACOES = 10
+    MIN_MEDIDAS = 7  # Mínimo de medições para manter observabilidade
+    iteracao = 0
+    
+    while iteracao < MAX_ITERACOES:
+        iteracao += 1
+        
+        # Verifica limite mínimo de medições
+        if len(net.measurement) < MIN_MEDIDAS:
+            print(f"❌ LIMITE MÍNIMO ATINGIDO: Apenas {len(net.measurement)} medidas restantes.")
+            print(f"   Remover mais medidas comprometeria a observabilidade do sistema.")
+            return False
+        
+        # Executa estimação WLS
+        try:
+            sucesso = estimate(net, init=init)
+            if not sucesso:
+                print(f"❌ [ITERAÇÃO {iteracao}] WLS não convergiu.")
+                return False
+        except Exception as e:
+            print(f"❌ [ITERAÇÃO {iteracao}] Erro na estimação WLS: {e}")
+            return False
+        
+        # Verifica χ² para detectar erros grosseiros
+        tem_erro_grosseiro = chi2_analysis(net, chi2_prob_false=0.05)
+        
+        if not tem_erro_grosseiro:
+            # ✅ Sucesso: nenhum erro grosseiro detectado
+            print(f"✅ [ITERAÇÃO {iteracao}] Teste χ² PASSOU - Nenhum erro grosseiro detectado.")
+            return True
+        
+        # 🚨 Erro grosseiro detectado: encontra e remove a medida com maior resíduo
+        medida_pior = obter_medida_maior_erro(net)
+        
+        if medida_pior is None:
+            print(f"❌ [ITERAÇÃO {iteracao}] Não foi possível calcular resíduos.")
+            return False
+        
+        # Verifica se o resíduo ponderado ultrapassa o threshold
+        if medida_pior['residuo_ponderado'] < rn_max_threshold:
+            print(f"⚠️  [ITERAÇÃO {iteracao}] Resíduo max ({medida_pior['residuo_ponderado']:.2f}σ) < threshold ({rn_max_threshold}σ)")
+            print(f"    Parando iterações (erro muito pequeno para remover).")
+            return True
+        
+        # Remove a medida com maior resíduo
+        print(f"🔄 [ITERAÇÃO {iteracao}] REMOVENDO: {medida_pior['nome']}")
+        print(f"   └─ Resíduo Ponderado: {medida_pior['residuo_ponderado']:.2f}σ (threshold: {rn_max_threshold}σ)")
+        net.measurement.drop(medida_pior['id'], inplace=True)
+    
+    print(f"❌ Limite de {MAX_ITERACOES} iterações atingido sem convergência.")
+    return False
