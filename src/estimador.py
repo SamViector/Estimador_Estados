@@ -77,13 +77,63 @@ def executar_pipeline_wls(net, limiar_lnr=3.5):
             print(" -> [BAD DATA] ✅ Teste Qui-Quadrado aprovado. Distribuição de resíduos aceitável.")
             return True
         
-        # Se houve alarme no Qui-Quadrado, aciona o teste LNR
         print(" -> [BAD DATA] 🚨 Alarme no Teste Qui-Quadrado! Iniciando varredura LNR...")
-        medidas_antes = set(net.measurement.index)
         
-        if remove_bad_data(net, init="flat", rn_max_threshold=limiar_lnr):
-            removidas = medidas_antes - set(net.measurement.index)
-            print(f" -> [BAD DATA] ✅ Purga concluída! {len(removidas)} medida(s) defeituosa(s) expurgada(s).")
+        # 1. Tira uma cópia de segurança das medições ANTES da purga
+        medidas_antes = net.measurement.copy()
+        indices_antes = set(medidas_antes.index)
+        
+        # 2. Executa a remoção automática de Bad Data
+        sucesso_purga = remove_bad_data(net, init="flat", rn_max_threshold=limiar_lnr)
+        
+        if sucesso_purga:
+            # 3. Descobre quais índices desaparecidos foram expurgados
+            indices_depois = set(net.measurement.index)
+            indices_removidos = sorted(list(indices_antes - indices_depois))
+            
+            print(f" -> [BAD DATA] ✅ Purga concluída! {len(indices_removidos)} medida(s) defeituosa(s) expurgada(s):\n")
+            
+            # 4. Imprime o relatório detalhado das medidas removidas
+            print("="*85)
+            print(" 🗑️  RELATÓRIO DE AUDITORIA SCADA - MEDIDAS EXPURGADAS (LNR)")
+            print("="*85)
+            print(f" {'ID':<3} | {'Grandeza':<14} | {'Elemento':<20} | {'Valor Lido (z)':<15} | {'Desvio (σ)':<10}")
+            print("-" * 85)
+            
+            for idx in indices_removidos:
+                row = medidas_antes.loc[idx]
+                m_type = row['measurement_type']
+                e_type = row['element_type']
+                elem_idx = row['element']
+                val_z = row['value']
+                std_dev = row['std_dev']
+                
+                # Mapeia o nome amigável do elemento
+                if e_type == "bus":
+                    nome_elem = net.bus.at[elem_idx, 'name'] if 'name' in net.bus.columns else f"Barra {elem_idx+1}"
+                elif e_type == "line":
+                    nome_elem = net.line.at[elem_idx, 'name'] if 'name' in net.line.columns else f"Linha {elem_idx+1}"
+                else:
+                    nome_elem = f"{e_type} {elem_idx}"
+                
+                # Mapeia a grandeza
+                if m_type == "v":
+                    grandeza = "Tensão (V)"
+                    unidade = "pu"
+                elif m_type == "p":
+                    grandeza = "Pot. Ativa (P)"
+                    unidade = "MW" if e_type == "line" or abs(val_z) > 1.5 else "pu"
+                elif m_type == "q":
+                    grandeza = "Pot. Reat. (Q)"
+                    unidade = "MVAr" if e_type == "line" or abs(val_z) > 1.5 else "pu"
+                else:
+                    grandeza = m_type.upper()
+                    unidade = ""
+                
+                str_valor = f"{val_z:.4f} {unidade}"
+                print(f" {idx:3d} | {grandeza:<14} | {nome_elem:<20} | {str_valor:<15} | {std_dev:.4f}")
+            
+            print("="*85 + "\n")
             return True
         else:
             print(" -> [BAD DATA] ❌ O erro foi detectado, mas não houve redundância local para isolá-lo.")
