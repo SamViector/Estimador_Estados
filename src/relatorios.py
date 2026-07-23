@@ -1,17 +1,46 @@
 import pandas as pd
 
 def exibir_quadro_medidas(net):
-    """Imprime a tabela de entrada (Z e Covariância)."""
-    df = pd.DataFrame({
+    """
+    Exibe a tabela do vetor de medições SCADA (Z) mapeando os índices 
+    dos elementos para seus nomes reais (ex: Barra 1, Linha 1-2).
+    """
+    elementos_nomeados = []
+
+    # Varre as medições e busca o nome real cadastrado na topologia
+    for idx, row in net.measurement.iterrows():
+        e_type = row['element_type']
+        elem_idx = row['element']
+
+        if e_type == "bus":
+            if 'name' in net.bus.columns and pd.notna(net.bus.at[elem_idx, 'name']):
+                nome = net.bus.at[elem_idx, 'name']
+            else:
+                nome = f"Barra {elem_idx + 1}"
+        elif e_type == "line":
+            if 'name' in net.line.columns and pd.notna(net.line.at[elem_idx, 'name']):
+                nome = net.line.at[elem_idx, 'name']
+            else:
+                nome = f"Linha {elem_idx + 1}"
+        else:
+            nome = f"{e_type} {elem_idx}"
+
+        elementos_nomeados.append(nome)
+
+    # Cria o DataFrame para exibição
+    df_scada = pd.DataFrame({
         'ID': net.measurement.index,
         'Tipo': net.measurement['measurement_type'],
-        'Elemento': net.measurement['element_type'] + " " + net.measurement['element'].astype(str),
+        'Elemento': elementos_nomeados,
         'Valor (pu)': net.measurement['value'],
         'Desvio Padrão (σ)': net.measurement['std_dev'],
         'Covariância (R)': net.measurement['std_dev'] ** 2
     })
-    print("\n" + "="*70 + "\n TABELA DE MEDIÇÕES SCADA (VETOR Z)\n" + "="*70)
-    print(df.to_string(index=False))
+
+    print("\n" + "="*70)
+    print(" TABELA DE MEDIÇÕES SCADA (VETOR Z)")
+    print("="*70)
+    print(df_scada.to_string(index=False, float_format='{:.6f}'.format))
 
 def exibir_comparacao_finais(net):
     """Imprime comparação exata entre Módulo e Ângulo Verdadeiro vs Estimado."""
