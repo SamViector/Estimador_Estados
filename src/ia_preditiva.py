@@ -6,6 +6,7 @@ import pandapower as pp
 import copy
 import warnings
 from sklearn.neural_network import MLPRegressor
+import pandas as pd
 
 # Suprime os avisos de não convergência durante a geração de dados extremos
 warnings.filterwarnings("ignore", message=".*Power Flow nr did not converge.*")
@@ -103,23 +104,42 @@ def recuperar_observabilidade_com_ia(net, medidas_antigas, indices_removidos):
         e_type = row['element_type']
         elem_idx = row['element']
         
-        # 1. Geração de Dados e Treino em Tempo Real para este sensor específico
+       # 1. MAPEAMENTO DO NOME AMIGÁVEL DO ELEMENTO (Barra 1, Linha 1-2, etc.)
+        if e_type == "bus":
+            if 'name' in net.bus.columns and pd.notna(net.bus.at[elem_idx, 'name']):
+                nome_elem = net.bus.at[elem_idx, 'name']
+            else:
+                nome_elem = f"Barra {elem_idx + 1}"
+        elif e_type == "line":
+            if 'name' in net.line.columns and pd.notna(net.line.at[elem_idx, 'name']):
+                nome_elem = net.line.at[elem_idx, 'name']
+            else:
+                nome_elem = f"Linha {elem_idx + 1}"
+        else:
+            nome_elem = f"{e_type} {elem_idx}"
+            
+        # Nome da grandeza (Tensão V, Potência P, Potência Q)
+        grandeza_str = "V" if m_type == "v" else ("P" if m_type == "p" else "Q")
+
+        # 2. Geração de Dados e Treino em Tempo Real para este sensor específico
         assistente.gerar_historico_e_treinar(net, m_type, e_type, elem_idx)
         
-        # 2. IA prevê o valor do sensor para a hora atual (carga nominal = 1.0)
+        # 3. IA prevê o valor do sensor para a hora atual
         valor_ia = assistente.prever_estado_atual(fator_atual=1.0)
         
-        # 3. Parametrização da incerteza: Atribuímos um Desvio Padrão mais alto (ex: 5% a 10%),
-        # para o Estimador de Estados saber que é um dado "imaginado" pela IA, dando preferência aos sensores físicos reais.
-        std_ia = max(0.05, abs(valor_ia) * 0.10) 
+        # 4. Parametrização da incerteza (Desvio padrão de pseudo-medida)
+        std_ia = max(0.05, abs(valor_ia) * 0.10) if m_type in ["p", "q"] else 0.05
         
-        # 4. Injetamos a "Pseudo-Medida Inteligente" na tabela do SCADA
-        nome_sensor = f"Pseudo-MLP {m_type.upper()}_{e_type} {elem_idx}"
+        # 5. Injeta a "Pseudo-Medida Inteligente" na tabela do SCADA
+        nome_sensor = f"Pseudo-MLP {grandeza_str} ({nome_elem})"
         pp.create_measurement(net, m_type, e_type, value=valor_ia, std_dev=std_ia, 
                               element=elem_idx, name=nome_sensor)
         
         medidas_restauradas += 1
-        print(f" 🟢 [MLP] Sensor Virtual Gerado -> {nome_sensor:<20} | Predição: {valor_ia:8.4f}")
+        
+        # Unidade amigável no log
+        unidade_str = "pu" if m_type == "v" else ("MW/MVAr" if abs(valor_ia) > 1.5 else "pu")
+        print(f" 🟢 [MLP] Sensor Virtual Gerado -> {nome_sensor:<35} | Predição: {valor_ia:8.4f} {unidade_str}")
         
     print(f"\n -> [IA] ✅ {medidas_restauradas} Pseudo-Medidas injetadas! A rede voltou a ser observável.")
     print("="*70)
