@@ -1,56 +1,47 @@
 # =====================================================================
-# FICHEIRO: src/ia_preditiva.py
+# ARQUIVO: src/ia_preditiva.py
 # =====================================================================
 import numpy as np
 import pandapower as pp
 import copy
 import warnings
-from sklearn.neural_network import MLPRegressor
 import pandas as pd
+from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-# Suprime os avisos de não convergência durante a geração de dados extremos
+# IMPORTAÇÃO DO NOVO MÓDULO DE GRÁFICOS
+from src.graficos_ia import exibir_dashboard_ia
+
+# Suprime avisos de não convergência durante simulações extremas de treino
 warnings.filterwarnings("ignore", message=".*Power Flow nr did not converge.*")
 
 class AssistenteMLP_DigitalTwin:
     def __init__(self):
-        # Configuração da Rede Neural (2 camadas ocultas com 20 e 10 neurónios)
-        # O solver 'lbfgs' (ou 'adam') capta perfeitamente a curva não-linear P-V
+        # Configuração da Rede Neural (MLP)
         self.mlp = MLPRegressor(hidden_layer_sizes=(20, 10), activation='relu', 
                                 solver='adam', max_iter=1500, random_state=42)
+        self.X_treino = None
+        self.y_treino = None
 
     def gerar_historico_e_treinar(self, net_base, m_type, e_type, elem_idx, num_amostras=150):
-        """
-        Gera um histórico operativo (Digital Twin) variando o perfil de carga da rede.
-        Resolve o fluxo de potência para cada variação e ensina à IA como o medidor
-        específico se comporta perante as leis de Kirchhoff.
-        """
         X_treino = []
         y_treino = []
 
-        # Trabalhamos numa cópia para não corromper a rede original em tempo real
         net_sim = copy.deepcopy(net_base)
         cargas_p = net_sim.load.p_mw.copy()
         cargas_q = net_sim.load.q_mvar.copy()
 
-        # Simulações de carga variando de 70% a 130% do consumo nominal
         fatores_carga = np.linspace(0.7, 1.3, num_amostras)
 
         for fator in fatores_carga:
-            # Adiciona uma ligeira perturbação aleatória (5%) a cada carga para criar
-            # variabilidade realista (perfis de consumo independentes)
-            ruido = np.random.normal(1.0, 0.05, len(net_sim.load))
-            
+            ruido = np.random.normal(1.0, 0.001, len(net_sim.load))
             net_sim.load.p_mw = cargas_p * fator * ruido
             net_sim.load.q_mvar = cargas_q * fator * ruido
 
             try:
-                # Executa o fluxo de carga exato (sem mostrar logs)
                 pp.runpp(net_sim, verbose=False)
-                
-                # A "Feature" (X) que a IA vê é o nível de carregamento global do sistema
                 X_treino.append([fator])
 
-                # O "Alvo" (y) é a grandeza física que a IA tem de aprender a prever
                 if m_type == "v":
                     val = net_sim.res_bus.at[elem_idx, "vm_pu"]
                 elif m_type == "p" and e_type == "bus":
@@ -67,36 +58,47 @@ class AssistenteMLP_DigitalTwin:
                 y_treino.append(val)
                 
             except pp.LoadflowNotConverged:
-                # Se a rede entrar em colapso com 130% de carga, a IA ignora essa amostra
                 continue
 
-        # Treina a Rede Neural com a física exata da rede!
-        X_treino = np.array(X_treino)
-        y_treino = np.array(y_treino)
-        self.mlp.fit(X_treino, y_treino)
+        self.X_treino = np.array(X_treino)
+        self.y_treino = np.array(y_treino)
+        self.mlp.fit(self.X_treino, self.y_treino)
+
+        # =========================================================
+        # CÁLCULO E EXIBIÇÃO DAS MÉTRICAS DE AVALIAÇÃO DA IA
+        # =========================================================
+        y_pred = self.mlp.predict(self.X_treino)
+        
+        mse = mean_squared_error(self.y_treino, y_pred)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(self.y_treino, y_pred)
+        r2 = r2_score(self.y_treino, y_pred)
+        
+        unidade = "pu" if m_type == "v" else "MW/MVAr"
+        
+        print(f"   [MÉTRICAS IA] Treinamento concluído para ID {elem_idx} ({e_type}):")
+        print(f"   > R² (Acurácia de Forma): {r2:.4f} (Ideal: > 0.95)")
+        print(f"   > RMSE (Erro Quadrático): {rmse:.6f} {unidade}")
+        print(f"   > MAE (Erro Médio Abs.) : {mae:.6f} {unidade}")
 
     def prever_estado_atual(self, fator_atual=1.0):
-        """
-        Prevê com alta precisão qual deveria ser o valor do sensor perdido
-        considerando que a rede está a operar no fator nominal (1.0).
-        """
-        # Num cenário de EMS real, o 'fator_atual' viria do módulo de Previsão de Carga
         return self.mlp.predict([[fator_atual]])[0]
 
 
 def recuperar_observabilidade_com_ia(net, medidas_antigas, indices_removidos):
-    """
-    Treina a IA para cada medida perdida, gera uma Pseudo-Medida baseada
-    na física da rede, e injeta na matriz WLS para evitar inobservabilidade.
-    """
-    print("\n" + "="*70)
+    print("\n" + "="*75)
     print(" 🧠 MÓDULO DE INTELIGÊNCIA ARTIFICIAL ATIVADO (MLP - DIGITAL TWIN)")
-    print("="*70)
+    print("="*75)
     print(" -> [IA] Alerta: O expurgo LNR comprometeu a observabilidade (Matriz Singular)!")
-    print(" -> [IA] A iniciar simulações de fluxo para treinar as Redes Neurais...\n")
+    print(" -> [IA] Iniciando simulações de fluxo para treinar as Redes Neurais...\n")
     
     assistente = AssistenteMLP_DigitalTwin()
     medidas_restauradas = 0
+    
+    # Listas para guardar dados para o gráfico
+    historico_all = []
+    predicoes_all = []
+    nomes_all = []
     
     for idx in indices_removidos:
         row = medidas_antigas.loc[idx]
@@ -104,7 +106,6 @@ def recuperar_observabilidade_com_ia(net, medidas_antigas, indices_removidos):
         e_type = row['element_type']
         elem_idx = row['element']
         
-       # 1. MAPEAMENTO DO NOME AMIGÁVEL DO ELEMENTO (Barra 1, Linha 1-2, etc.)
         if e_type == "bus":
             if 'name' in net.bus.columns and pd.notna(net.bus.at[elem_idx, 'name']):
                 nome_elem = net.bus.at[elem_idx, 'name']
@@ -118,28 +119,35 @@ def recuperar_observabilidade_com_ia(net, medidas_antigas, indices_removidos):
         else:
             nome_elem = f"{e_type} {elem_idx}"
             
-        # Nome da grandeza (Tensão V, Potência P, Potência Q)
         grandeza_str = "V" if m_type == "v" else ("P" if m_type == "p" else "Q")
 
-        # 2. Geração de Dados e Treino em Tempo Real para este sensor específico
         assistente.gerar_historico_e_treinar(net, m_type, e_type, elem_idx)
-        
-        # 3. IA prevê o valor do sensor para a hora atual
         valor_ia = assistente.prever_estado_atual(fator_atual=1.0)
         
-        # 4. Parametrização da incerteza (Desvio padrão de pseudo-medida)
         std_ia = max(0.05, abs(valor_ia) * 0.10) if m_type in ["p", "q"] else 0.05
         
-        # 5. Injeta a "Pseudo-Medida Inteligente" na tabela do SCADA
         nome_sensor = f"Pseudo-MLP {grandeza_str} ({nome_elem})"
         pp.create_measurement(net, m_type, e_type, value=valor_ia, std_dev=std_ia, 
                               element=elem_idx, name=nome_sensor)
         
-        medidas_restauradas += 1
+        # Salva para o Dashboard
+        historico_all.append({'X': assistente.X_treino, 'y': assistente.y_treino})
+        predicoes_all.append(valor_ia)
+        nomes_all.append(nome_sensor)
         
-        # Unidade amigável no log
+        medidas_restauradas += 1
         unidade_str = "pu" if m_type == "v" else ("MW/MVAr" if abs(valor_ia) > 1.5 else "pu")
         print(f" 🟢 [MLP] Sensor Virtual Gerado -> {nome_sensor:<35} | Predição: {valor_ia:8.4f} {unidade_str}")
         
-    print(f"\n -> [IA] ✅ {medidas_restauradas} Pseudo-Medidas injetadas! A rede voltou a ser observável.")
-    print("="*70)
+    print(f"\n -> [IA] ✅ {medidas_restauradas} Pseudo-Medida(s) injetada(s)! A rede voltou a ser observável.")
+    print("="*75)
+    
+    # PERGUNTA SE O USUÁRIO QUER VER O GRÁFICO DA IA
+    while True:
+        ver_grafico = input("\n -> [IA] Deseja visualizar o Dashboard de Aprendizado do Gêmeo Digital? (S/N): ").strip().upper()
+        if ver_grafico == 'S':
+            print(" -> Abrindo janela de gráficos (Feche a janela do gráfico para o programa continuar)...")
+            exibir_dashboard_ia(historico_all, predicoes_all, nomes_all)
+            break
+        elif ver_grafico == 'N':
+            break
