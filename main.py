@@ -134,7 +134,7 @@ def configurar_e_injetar_erros(net):
 
     print(f"\n[SIMULAÇÃO] 🚨 {len(medidores_alterados)} erro(s) grosseiro(s) injetado(s) na rede.")
 
-def executar_estimacao(net, limiar_lnr=3.5):
+def executar_estimacao(net, limiar_lnr=3.5, modo_interativo=True):
     """
     Agrupa o pipeline padrão de estimação (Pré-filtro -> Observabilidade -> WLS -> Relatórios).
     """
@@ -145,7 +145,7 @@ def executar_estimacao(net, limiar_lnr=3.5):
     observavel, _ = analisar_observabilidade(net)
     
     if observavel:
-        sucesso = executar_pipeline_wls(net, limiar_lnr=limiar_lnr)
+        sucesso = executar_pipeline_wls(net, limiar_lnr=limiar_lnr,modo_interativo=modo_interativo)
         if sucesso:
             exibir_comparacao_finais(net)
             exibir_tabelas_comparacao_estados(net)
@@ -184,7 +184,8 @@ def main():
             else:
                 print("\n[SIMULAÇÃO] ✅ Operação em Modo Normal (sem avarias).")
 
-            executar_estimacao(net)
+            # Chama a execução ativando explicitamente o painel interativo de IA em caso de falha
+            executar_estimacao(net, modo_interativo=True)
             input("\nPressione ENTER para voltar ao menu principal...")
 
         elif opcao == "2":
@@ -203,7 +204,8 @@ def main():
             else:
                 print("\n[SIMULAÇÃO] ✅ Operação em Modo Normal (sem avarias).")
 
-            executar_estimacao(net)
+            # Chama a execução ativando explicitamente o painel interativo de IA em caso de falha
+            executar_estimacao(net, modo_interativo=True)
             input("\nPressione ENTER para voltar ao menu principal...")
 
         else:
