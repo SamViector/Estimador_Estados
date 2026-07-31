@@ -18,12 +18,12 @@ warnings.filterwarnings("ignore", message=".*Power Flow nr did not converge.*")
 class AssistenteMLP_DigitalTwin:
     def __init__(self):
         # Configuração da Rede Neural (MLP)
-        self.mlp = MLPRegressor(hidden_layer_sizes=(20, 10), activation='relu', 
-                                solver='adam', max_iter=1500, random_state=42)
+        self.mlp = MLPRegressor(hidden_layer_sizes=(10, 5), activation='relu', 
+                                solver='lbfgs', max_iter=1500, random_state=42)
         self.X_treino = None
         self.y_treino = None
 
-    def gerar_historico_e_treinar(self, net_base, m_type, e_type, elem_idx, num_amostras=150):
+    def gerar_historico_e_treinar(self, net_base, m_type, e_type, elem_idx, num_amostras=200):
         X_treino = []
         y_treino = []
 
@@ -124,7 +124,7 @@ def recuperar_observabilidade_com_ia(net, medidas_antigas, indices_removidos):
         assistente.gerar_historico_e_treinar(net, m_type, e_type, elem_idx)
         valor_ia = assistente.prever_estado_atual(fator_atual=1.0)
         
-        std_ia = max(0.05, abs(valor_ia) * 0.10) if m_type in ["p", "q"] else 0.05
+        std_ia = max(0.01, abs(valor_ia) * 0.10) if m_type in ["p", "q"] else 0.01
         
         nome_sensor = f"Pseudo-MLP {grandeza_str} ({nome_elem})"
         pp.create_measurement(net, m_type, e_type, value=valor_ia, std_dev=std_ia, 
