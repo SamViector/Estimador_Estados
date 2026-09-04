@@ -92,8 +92,13 @@ def instalar_medidas_scada_generico(net, desvio_v=0.004, desvio_p=1, desvio_q=1)
         v_med = v_real + np.random.normal(0, desvio_v)
         pp.create_measurement(net, "v", "bus", value=v_med, std_dev=desvio_v, element=bus_id)
 
+    # Identifica quais são as barras Slack (ext_grid)
+    barras_slack = net.ext_grid.bus.values
+    
     # 2. Medidas de Injeção (P, Q) em todas as Barras
     for bus_id in net.bus.index:
+        if bus_id in barras_slack:
+            continue # <-- PULA A BARRA SLACK PARA EVITAR O BUG DO ESTIMADOR
         p_real = net.res_bus.at[bus_id, 'p_mw']
         q_real = net.res_bus.at[bus_id, 'q_mvar']
         pp.create_measurement(net, "p", "bus", value=p_real + np.random.normal(0, desvio_p), std_dev=desvio_p, element=bus_id)
@@ -106,4 +111,9 @@ def instalar_medidas_scada_generico(net, desvio_v=0.004, desvio_p=1, desvio_q=1)
         pp.create_measurement(net, "p", "line", value=p_from + np.random.normal(0, desvio_p), std_dev=desvio_p, element=line_id, side="from")
         pp.create_measurement(net, "q", "line", value=q_from + np.random.normal(0, desvio_q), std_dev=desvio_q, element=line_id, side="from")
 
-        
+# 4. Medidas de Fluxo (P, Q) nas Linhas (Lado 'to')
+    for line_id in net.line.index:
+        p_to = net.res_line.at[line_id, 'p_to_mw']
+        q_to = net.res_line.at[line_id, 'q_to_mvar']
+        pp.create_measurement(net, "p", "line", value=p_to + np.random.normal(0, desvio_p), std_dev=desvio_p, element=line_id, side="to")
+        pp.create_measurement(net, "q", "line", value=q_to + np.random.normal(0, desvio_q), std_dev=desvio_q, element=line_id, side="to")        

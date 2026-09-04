@@ -105,7 +105,7 @@ def executar_pipeline_wls(net, limiar_lnr=3.5, modo_interativo=True):
                 grandeza = "Tensão (V)"
             elif m_type in ["p", "q"]:
                 col = 'p_mw' if m_type == "p" else 'q_mvar'
-                h_val = -net.res_bus_est.at[elem, col]
+                h_val = net.res_bus_est.at[elem, col]
                 grandeza = "Injeção P" if m_type == "p" else "Injeção Q"
         elif e_type == "line":
             nome_elem = net.line.at[elem, 'name'] if 'name' in net.line.columns else f"L{elem}"
