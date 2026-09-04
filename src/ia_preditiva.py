@@ -127,8 +127,16 @@ def recuperar_observabilidade_com_ia(net, medidas_antigas, indices_removidos):
         std_ia = max(0.01, abs(valor_ia) * 0.10) if m_type in ["p", "q"] else 0.01
         
         nome_sensor = f"Pseudo-MLP {grandeza_str} ({nome_elem})"
+        
+        # 1. Recupera o lado da linha (side), blindando contra valores nulos para as barras
+        side_val = row['side'] if 'side' in row.index else None
+        side_arg = side_val if pd.notna(side_val) else None
+        
+        nome_sensor = f"Pseudo-MLP {grandeza_str} ({nome_elem})"
+        
+        # 2. Injeta o Sensor Virtual passando o parâmetro 'side' dinâmico
         pp.create_measurement(net, m_type, e_type, value=valor_ia, std_dev=std_ia, 
-                              element=elem_idx, name=nome_sensor)
+                              element=elem_idx, name=nome_sensor, side=side_arg)
         
         # Salva para o Dashboard
         historico_all.append({'X': assistente.X_treino, 'y': assistente.y_treino})
