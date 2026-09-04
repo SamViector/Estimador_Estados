@@ -58,7 +58,6 @@ def configurar_e_injetar_erros(net):
     print(" 🚨 PAINEL DE CONFIGURAÇÃO DE ERROS GROSSEIROS (SABOTAGEM)")
     print("="*70)
     
-    # Exibe lista simplificada dos medidores disponíveis
     print(f" {'ID':<4} | {'Tipo':<12} | {'Elemento':<22} | {'Valor Lido Atual':<15}")
     print("-" * 70)
     
@@ -68,21 +67,25 @@ def configurar_e_injetar_erros(net):
         elem_idx = row['element']
         val = row['value']
         
-        # Mapeia nome do elemento
+        # 1. Extração direta do nome (Com fallback blindado)
         if e_type == "bus":
-            nome_elem = net.bus.at[elem_idx, 'name'] if 'name' in net.bus.columns else f"Barra {elem_idx+1}"
+            valor_nome = net.bus.at[elem_idx, 'name']
+            nome_elem = str(valor_nome) if pd.notna(valor_nome) and valor_nome is not None else f"Barra {elem_idx}"
         elif e_type == "line":
-            nome_elem = net.line.at[elem_idx, 'name'] if 'name' in net.line.columns else f"Linha {elem_idx+1}"
+            valor_nome = net.line.at[elem_idx, 'name']
+            nome_elem = str(valor_nome) if pd.notna(valor_nome) and valor_nome is not None else f"Linha {elem_idx}"
         else:
             nome_elem = f"{e_type} {elem_idx}"
             
-        # Nome amigável do tipo
+        # 2. Formatação do tipo de grandeza
         tipo_str = "Tensão (V)" if m_type == "v" else ("Pot. Ativa (P)" if m_type == "p" else "Pot. Reat. (Q)")
+        
+        # 3. Impressão alinhada do menu
         print(f" {idx:<4} | {tipo_str:<12} | {nome_elem:<22} | {val:<15.4f}")
         
     print("="*70)
 
-    # 1. Pergunta a quantidade de erros a injetar
+    # Coleta a quantidade de erros a injetar
     total_medidores = len(net.measurement)
     while True:
         try:
@@ -96,7 +99,7 @@ def configurar_e_injetar_erros(net):
 
     medidores_alterados = []
     
-    # 2. Loop para configurar cada erro
+    # Loop para configurar cada erro
     for i in range(qtd):
         print(f"\n --- Configurando Erro {i+1} de {qtd} ---")
         
@@ -118,10 +121,9 @@ def configurar_e_injetar_erros(net):
         val_antigo = net.measurement.at[id_med, 'value']
         m_type = net.measurement.at[id_med, 'measurement_type']
         
-        # Unidade explicativa para o prompt
         unidade_dica = "pu (ex: 0.50 ou 1.30)" if m_type == "v" else "MW/MVAr (ex: 150.0 ou -80.0)"
 
-        # Seleção do novo valor corrompido
+        # Coleta do novo valor corrompido
         while True:
             try:
                 novo_val = float(input(f" Digite o NOVO valor corrompido [{unidade_dica}] (Atual = {val_antigo:.4f}): ").strip())
@@ -129,7 +131,7 @@ def configurar_e_injetar_erros(net):
             except ValueError:
                 print(" ⚠️ Digite um número válido (ex: 0.50 ou 120.5).")
 
-        # Injeta a alteração na tabela de medições do pandapower
+        # Injeção física na tabela do pandapower
         net.measurement.at[id_med, 'value'] = novo_val
         medidores_alterados.append(id_med)
         print(f" 🚨 Medidor ID {id_med} atualizado com sucesso! ({val_antigo:.4f} -> {novo_val:.4f})")
