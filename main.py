@@ -5,7 +5,9 @@ import sys
 import os
 import warnings
 import pandas as pd
+import pandapower.networks as nw
 
+from src.scada import instalar_medidas_scada_generico
 # Garante que as pastas src/ e cenarios/ são visíveis para os imports
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
@@ -157,59 +159,48 @@ def main():
         print("=================================================================")
         print(" ⚡ EMS - ESTIMADOR DE ESTADOS WLS (MENU PRINCIPAL) ⚡")
         print("=================================================================")
-        print(" [1] Executar Rede de 4 Barras")
-        print(" [2] Executar Rede de 5 Barras (Sistema em Malha)")
+        print(" [1] Executar Rede de 4 Barras (Radial)")
+        print(" [2] Executar Rede de 5 Barras (Malha Simples)")
+        print(" [3] Executar Rede IEEE 14 Barras (Sist. de Transmissão Padrão)")
+        print(" [4] Executar Rede IEEE 30 Barras (Alta Complexidade)")
         print(" [0] Sair da Aplicação")
         print("=================================================================")
         
-        opcao = input(" Escolha a topologia desejada (0-2): ").strip()
+        opcao = input(" Escolha a topologia desejada (0-4): ").strip()
         
         if opcao == "0":
             print("\n Encerrando o Estimador de Estados. Até logo!")
             break
             
-        elif opcao == "1":
-            print("\n" + "="*65)
-            print(" 🔄 CARREGANDO SISTEMA: 4 BARRAS")
-            print("="*65)
-            net, b1, b2, b3, b4 = criar_sistema_4barras()
-            pt_4b(net)
-            
-            # Instala o SCADA base
-            instalar_medidas_scada_4barras(net)
-            
+        elif opcao in ["1", "2", "3", "4"]:
+            if opcao == "1":
+                print("\n 🔄 CARREGANDO SISTEMA: 4 BARRAS")
+                net, *_ = criar_sistema_4barras()
+                instalar_medidas_scada_4barras(net)
+            elif opcao == "2":
+                print("\n 🔄 CARREGANDO SISTEMA: 5 BARRAS")
+                net, *_ = criar_sistema_5barras()
+                instalar_medidas_scada_5barras(net)
+            elif opcao == "3":
+                print("\n 🔄 CARREGANDO SISTEMA: IEEE 14 BARRAS")
+                net = nw.case14()
+                instalar_medidas_scada_generico(net)
+            elif opcao == "4":
+                print("\n 🔄 CARREGANDO SISTEMA: IEEE 30 BARRAS")
+                net = nw.case30()
+                instalar_medidas_scada_generico(net)
+                
             modo = exibir_menu_cenarios()
             if modo == "B":
                 configurar_e_injetar_erros(net)
             else:
                 print("\n[SIMULAÇÃO] ✅ Operação em Modo Normal (sem avarias).")
 
-            # Chama a execução ativando explicitamente o painel interativo de IA em caso de falha
-            executar_estimacao(net, modo_interativo=True)
-            input("\nPressione ENTER para voltar ao menu principal...")
-
-        elif opcao == "2":
-            print("\n" + "="*65)
-            print(" 🔄 CARREGANDO SISTEMA: 5 BARRAS")
-            print("="*65)
-            net, b1, b2, b3, b4, b5 = criar_sistema_5barras()
-            pt_5b(net)
-            
-            # Instala o SCADA base
-            instalar_medidas_scada_5barras(net)
-            
-            modo = exibir_menu_cenarios()
-            if modo == "B":
-                configurar_e_injetar_erros(net)
-            else:
-                print("\n[SIMULAÇÃO] ✅ Operação em Modo Normal (sem avarias).")
-
-            # Chama a execução ativando explicitamente o painel interativo de IA em caso de falha
             executar_estimacao(net, modo_interativo=True)
             input("\nPressione ENTER para voltar ao menu principal...")
 
         else:
-            print("\n ⚠️ Opção inválida! Por favor, digite 0, 1 ou 2.")
+            print("\n ⚠️ Opção inválida! Por favor, digite um número entre 0 e 4.")
             input(" Pressione ENTER para tentar novamente...")
 
 if __name__ == "__main__":

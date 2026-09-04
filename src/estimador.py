@@ -35,7 +35,7 @@ def executar_pipeline_wls(net, limiar_lnr=3.5, modo_interativo=True):
             # Limites: Tensão fora de 0.75 a 1.25 pu | Potências maiores que 1.2 pu (120 MW)
             if m_type == 'v' and (val < 0.75 or val > 1.25):
                 indices_absurdos.append(idx)
-            elif m_type in ['p', 'q'] and abs(val) > 1.2:
+            elif m_type in ['p', 'q'] and abs(val) > 250.0:  # 250 MW ou MVAr
                 indices_absurdos.append(idx)
                 
         if len(indices_absurdos) > 0:

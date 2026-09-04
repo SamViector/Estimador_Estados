@@ -32,7 +32,7 @@ def exibir_quadro_medidas(net):
         'ID': net.measurement.index,
         'Tipo': net.measurement['measurement_type'],
         'Elemento': elementos_nomeados,
-        'Valor (pu)': net.measurement['value'],
+        'Valor': net.measurement['value'],
         'Desvio Padrão (σ)': net.measurement['std_dev'],
         'Covariância (R)': net.measurement['std_dev'] ** 2
     })
