@@ -99,7 +99,7 @@ def executar_pipeline_wls(net, limiar_lnr=3.5, modo_interativo=True):
         std_dev = row['std_dev']
         
         if e_type == "bus":
-            nome_elem = net.bus.at[elem, 'name'][:7] if 'name' in net.bus.columns else f"B{elem}"
+            nome_elem = str(net.bus.at[elem, 'name'])[:7] if 'name' in net.bus.columns and pd.notna(net.bus.at[elem, 'name']) else f"B{elem}"
             if m_type == "v":
                 h_val = net.res_bus_est.at[elem, 'vm_pu']
                 grandeza = "Tensão (V)"

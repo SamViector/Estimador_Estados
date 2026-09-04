@@ -105,7 +105,7 @@ def exibir_tabela_residuos(net):
 
         # Mapeamento limpo de grandezas
         if e_type == "bus":
-            nome_elem = net.bus.at[element, 'name'][:7]
+            nome_elem = str(net.bus.at[element, 'name'])[:7] if 'name' in net.bus.columns and pd.notna(net.bus.at[element, 'name']) else f"Barra {element}"
             if m_type == "v":
                 h_val = net.res_bus_est.at[element, 'vm_pu']
                 r_val = net.res_bus.at[element, 'vm_pu']
@@ -113,8 +113,8 @@ def exibir_tabela_residuos(net):
             elif m_type in ["p", "q"]:
                 # Inversão de sinal: Injeção = -Demanda
                 col = 'p_mw' if m_type == "p" else 'q_mvar'
-                h_val = net.res_bus_est.at[element, col]
-                r_val = net.res_bus.at[element, col]
+                h_val = -net.res_bus_est.at[element, col]
+                r_val = -net.res_bus.at[element, col]
                 m_val = -m_val # <--- INVERTA O 'Z' AQUI TAMBÉM
                 grandeza = "Ativa (P)" if m_type == "p" else "Reat. (Q)"
                 nome = f"Injeção {grandeza} - {nome_elem}"

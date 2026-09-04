@@ -44,14 +44,14 @@ def instalar_medidas_scada_5barras(net):
  # Injeções de Potência (P, Q) - Desvio: 0.002 pu
     for b in [b2, b3, b4, b5]:
         # Potência ativa (P)
-        pp.create_measurement(net, "p", "bus", simular_medidor(-net.res_bus.at[b, 'p_mw'], 0.002), 0.002, b, name=f"P{b+1}")
+        pp.create_measurement(net, "p", "bus", simular_medidor(net.res_bus.at[b, 'p_mw'], 1), 1, b, name=f"P{b+1}")
         # Potência reativa (Q) 
-        pp.create_measurement(net, "q", "bus", simular_medidor(-net.res_bus.at[b, 'q_mvar'], 0.002), 0.002, b, name=f"Q{b+1}")
+        pp.create_measurement(net, "q", "bus", simular_medidor(net.res_bus.at[b, 'q_mvar'], 1), 1, b, name=f"Q{b+1}")
 
     # Fluxos de Linha (P, Q) - Desvio: 0.001 pu
     for idx, linha in net.line.iterrows():
-        pp.create_measurement(net, "p", "line", simular_medidor(net.res_line.at[idx, 'p_from_mw'], 0.001), 0.001, idx, side="from", name=f"P_{linha['name']}")
-        pp.create_measurement(net, "q", "line", simular_medidor(net.res_line.at[idx, 'q_from_mvar'], 0.001), 0.001, idx, side="from", name=f"Q_{linha['name']}")
+        pp.create_measurement(net, "p", "line", simular_medidor(net.res_line.at[idx, 'p_from_mw'], 0.8), 0.8, idx, side="from", name=f"P_{linha['name']}")
+        pp.create_measurement(net, "q", "line", simular_medidor(net.res_line.at[idx, 'q_from_mvar'], 0.8), 0.8, idx, side="from", name=f"Q_{linha['name']}")
 
     print(f" -> [SCADA] {len(net.measurement)} medidores alocados com sucesso na rede de 5 Barras!")
 
@@ -94,8 +94,8 @@ def instalar_medidas_scada_generico(net, desvio_v=0.004, desvio_p=1, desvio_q=1)
 
     # 2. Medidas de Injeção (P, Q) em todas as Barras
     for bus_id in net.bus.index:
-        p_real = -net.res_bus.at[bus_id, 'p_mw']
-        q_real = -net.res_bus.at[bus_id, 'q_mvar']
+        p_real = net.res_bus.at[bus_id, 'p_mw']
+        q_real = net.res_bus.at[bus_id, 'q_mvar']
         pp.create_measurement(net, "p", "bus", value=p_real + np.random.normal(0, desvio_p), std_dev=desvio_p, element=bus_id)
         pp.create_measurement(net, "q", "bus", value=q_real + np.random.normal(0, desvio_q), std_dev=desvio_q, element=bus_id)
 
@@ -105,3 +105,5 @@ def instalar_medidas_scada_generico(net, desvio_v=0.004, desvio_p=1, desvio_q=1)
         q_from = net.res_line.at[line_id, 'q_from_mvar']
         pp.create_measurement(net, "p", "line", value=p_from + np.random.normal(0, desvio_p), std_dev=desvio_p, element=line_id, side="from")
         pp.create_measurement(net, "q", "line", value=q_from + np.random.normal(0, desvio_q), std_dev=desvio_q, element=line_id, side="from")
+
+        
