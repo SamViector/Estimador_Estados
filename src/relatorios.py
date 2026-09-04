@@ -98,7 +98,10 @@ def exibir_tabela_residuos(net):
         m_type = row['measurement_type']
         e_type = row['element_type']
         element = row['element']
-        mensurado_z.append(row['value'])
+       
+
+        # Valor original que saiu do SCADA
+        m_val = row['value']
 
         # Mapeamento limpo de grandezas
         if e_type == "bus":
@@ -110,8 +113,9 @@ def exibir_tabela_residuos(net):
             elif m_type in ["p", "q"]:
                 # Inversão de sinal: Injeção = -Demanda
                 col = 'p_mw' if m_type == "p" else 'q_mvar'
-                h_val = -net.res_bus_est.at[element, col]
-                r_val = -net.res_bus.at[element, col]
+                h_val = net.res_bus_est.at[element, col]
+                r_val = net.res_bus.at[element, col]
+                m_val = -m_val # <--- INVERTA O 'Z' AQUI TAMBÉM
                 grandeza = "Ativa (P)" if m_type == "p" else "Reat. (Q)"
                 nome = f"Injeção {grandeza} - {nome_elem}"
 
@@ -127,16 +131,17 @@ def exibir_tabela_residuos(net):
         medicoes.append(nome)
         estimado_hx.append(h_val)
         real_hx.append(r_val)
+        mensurado_z.append(m_val) # <--- Adiciona a lista DEPOIS de processar o sinal
 
     df_res = pd.DataFrame({
         'Medição / Grandeza': medicoes,
         'Real (pu)': real_hx,
-        'Mensurado z (pu)': mensurado_z,
-        'Estimado h(x) (pu)': estimado_hx
+        'Mensurado z': mensurado_z,
+        'Estimado h(x)': estimado_hx
     })
     
     # Cálculo do resíduo bruto |z - h(x)|
-    df_res['Resíduo |z - h(x)|'] = abs(df_res['Mensurado z (pu)'] - df_res['Estimado h(x) (pu)'])
+    df_res['Resíduo |z - h(x)|'] = abs(df_res['Mensurado z'] - df_res['Estimado h(x)'])
 
     print("\n" + "="*95)
     print(" TABELA 3: COMPARAÇÃO DE MEDIÇÕES - ANÁLISE DE RESÍDUOS |z - h(x)|")

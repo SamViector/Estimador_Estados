@@ -17,9 +17,9 @@ def instalar_medidas_scada_4barras(net):
 # Injeções de Potência (P, Q) - Desvio: 0.002 pu
     for b in [b2, b3, b4]:
     # Potência ativa (P)
-        pp.create_measurement(net, "p", "bus", simular_medidor(-net.res_bus.at[b, 'p_mw'], 1),  1,b,name=f"P{b+1}")
+        pp.create_measurement(net, "p", "bus", simular_medidor(net.res_bus.at[b, 'p_mw'], 1),  1,b,name=f"P{b+1}")
     # Potência reativa (Q) 
-        pp.create_measurement(net, "q", "bus",simular_medidor(-net.res_bus.at[b, 'q_mvar'], 1), 1,b,name=f"Q{b+1}")
+        pp.create_measurement(net, "q", "bus",simular_medidor(net.res_bus.at[b, 'q_mvar'], 1), 1,b,name=f"Q{b+1}")
 
     # Fluxos de Linha (P, Q) - Desvio: 0.001 pu
     for idx, linha in net.line.iterrows():
