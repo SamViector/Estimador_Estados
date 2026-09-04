@@ -44,10 +44,11 @@ def exibir_menu_cenarios():
         print("\n --- MODO DE OPERAÇÃO DO SCADA ---")
         print(" [A] Estado Normal (Apenas ruído Gaussiano inerente)")
         print(" [B] Injetar Erros Grosseiros (Personalizado pelo Usuário)")
-        opcao = input(" Escolha a condição de medição (A/B): ").strip().upper()
-        if opcao in ["A", "B"]:
+        print(" [C] Apagão de Dados: Simular Perda de Observabilidade Severa (Ativa a IA)")
+        opcao = input(" Escolha a condição de medição (A/B/C): ").strip().upper()
+        if opcao in ["A", "B", "C"]:
             return opcao
-        print(" ⚠️ Opção inválida! Escolha A ou B.")
+        print(" ⚠️ Opção inválida! Escolha A, B ou C.")
 
 def configurar_e_injetar_erros(net):
     """
@@ -138,6 +139,36 @@ def configurar_e_injetar_erros(net):
 
     print(f"\n[SIMULAÇÃO] 🚨 {len(medidores_alterados)} erro(s) grosseiro(s) injetado(s) na rede.")
 
+def simular_apagao_dados(net):
+    """
+    Simula uma falha severa de telecomunicações (ataque ou queda de subestação).
+    Injeta um erro catastrófico simultâneo em medidores essenciais para forçar
+    a inobservabilidade da matriz e acionar o Digital Twin (IA).
+    """
+    print("\n" + "="*70)
+    print(" 🚨 MODO CATASTROFE: INJETANDO APAGÃO DE DADOS NA SUBESTAÇÃO 4...")
+    print("="*70)
+    
+    medidores_alterados = 0
+    # O ID 3 é o índice interno (0-based) da Barra 4
+    id_alvo = 3 
+    
+    for idx, row in net.measurement.iterrows():
+        # Corrompe a Injeção de Potência Ativa e Reativa da Barra 4
+        if row['element_type'] == 'bus' and row['element'] == id_alvo:
+            net.measurement.at[idx, 'value'] += 150.0
+            medidores_alterados += 1
+            print(f" ❌ Sensor Nodal ({row['measurement_type'].upper()}) da Barra 4 derrubado.")
+            
+        # Corrompe os Fluxos das Linhas conectadas à Barra 4 (opcional, para garantir a quebra)
+        elif row['element_type'] == 'line' and row['element'] in [2, 3]: # Exemplo: Linhas 2-4 ou 3-4
+            net.measurement.at[idx, 'value'] -= 100.0
+            medidores_alterados += 1
+            print(f" ❌ Sensor de Fluxo ({row['measurement_type'].upper()}) da Linha derrubado.")
+            
+    print(f"\n[SIMULAÇÃO] 🚨 {medidores_alterados} medidores críticos corrompidos simultaneamente!")
+
+
 def executar_estimacao(net, limiar_lnr=3.5, modo_interativo=True):
     """
     Agrupa o pipeline padrão de estimação (Pré-filtro -> Observabilidade -> WLS -> Relatórios).
@@ -195,6 +226,8 @@ def main():
             modo = exibir_menu_cenarios()
             if modo == "B":
                 configurar_e_injetar_erros(net)
+            elif modo == "C":
+                simular_apagao_dados(net)
             else:
                 print("\n[SIMULAÇÃO] ✅ Operação em Modo Normal (sem avarias).")
 
