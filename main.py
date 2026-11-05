@@ -45,10 +45,11 @@ def exibir_menu_cenarios():
         print(" [A] Estado Normal (Apenas ruído Gaussiano inerente)")
         print(" [B] Injetar Erros Grosseiros (Personalizado pelo Usuário)")
         print(" [C] Apagão de Dados: Simular Perda de Observabilidade Severa (Ativa a IA)")
-        opcao = input(" Escolha a condição de medição (A/B/C): ").strip().upper()
-        if opcao in ["A", "B", "C"]:
+        print(" [D] Medição Reduzida: Apenas Injeções Nodais (Sem Fluxos nas Linhas)")
+        opcao = input(" Escolha a condição de medição (A/B/C/D): ").strip().upper()
+        if opcao in ["A", "B", "C", "D"]:
             return opcao
-        print(" ⚠️ Opção inválida! Escolha A, B ou C.")
+        print(" ⚠️ Opção inválida! Escolha A, B, C ou D.")
 
 def configurar_e_injetar_erros(net):
     """
@@ -168,6 +169,37 @@ def simular_apagao_dados(net):
             
     print(f"\n[SIMULAÇÃO] 🚨 {medidores_alterados} medidores críticos corrompidos simultaneamente!")
 
+def simular_medicao_minima_injecoes(net):
+    """
+    Desliga todos os medidores de fluxo de linha e tensões secundárias.
+    Mantém apenas as injeções de potência (P, Q) e 1 Tensão na Barra Slack
+    para garantir a observabilidade mínima do sistema (2N - 1 medidas).
+    """
+    print("\n" + "="*70)
+    print(" 📉 MODO REDUZIDO: TESTE DE OBSERVABILIDADE MÍNIMA (INJEÇÕES)")
+    print("="*70)
+    
+    indices_remover = []
+    barras_slack = net.ext_grid.bus.values
+    
+    for idx, row in net.measurement.iterrows():
+        e_type = row['element_type']
+        m_type = row['measurement_type']
+        elem = row['element']
+        
+        # Remove todos os sensores de fluxo nas linhas
+        if e_type == "line":
+            indices_remover.append(idx)
+        # Remove sensores de tensão, EXCETO o da Barra Slack (referência)
+        elif m_type == "v" and elem not in barras_slack:
+            indices_remover.append(idx)
+            
+    # Executa o desligamento em massa
+    net.measurement.drop(indices_remover, inplace=True)
+    
+    print(f" -> [SCADA] {len(indices_remover)} medidores (Fluxos e Tensões) foram desligados.")
+    print(f" -> [SCADA] Restam {len(net.measurement)} sensores ativos (Injeções Nodais + 1 Tensão Slack).")
+    print(" -> [SISTEMA] A rede operará no seu plano mínimo de medição!")
 
 def executar_estimacao(net, limiar_lnr=3.5, modo_interativo=True):
     """
@@ -228,6 +260,8 @@ def main():
                 configurar_e_injetar_erros(net)
             elif modo == "C":
                 simular_apagao_dados(net)
+            elif modo == "D":
+                simular_medicao_minima_injecoes(net)
             else:
                 print("\n[SIMULAÇÃO] ✅ Operação em Modo Normal (sem avarias).")
 

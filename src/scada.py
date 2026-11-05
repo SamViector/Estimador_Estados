@@ -79,6 +79,11 @@ def instalar_medidas_scada_generico(net, desvio_v=0.004, desvio_p=1, desvio_q=1)
     """
     Instala medidas SCADA automaticamente para qualquer topologia (ex: IEEE 14, 30).
     Roda o fluxo de carga real e adiciona ruído gaussiano estatístico.
+    Parâmetros:
+        desvio_v (float): Desvio padrão do ruído para os medidores de tensão.
+        desvio_p (float): Desvio padrão do ruído para os medidores de potência ativa.
+        desvio_q (float): Desvio padrão do ruído para os medidores de potência reativa.
+    
     """
     np.random.seed(42)
     pp.runpp(net) # Obtém o Estado Verdadeiro base
