@@ -87,9 +87,23 @@ class AssistenteMLP_DigitalTwin:
 
 def recuperar_observabilidade_com_ia(net, medidas_antigas, indices_removidos):
     print("\n" + "="*75)
+    print(" 🚨 ALERTA CRÍTICO: Perda de Observabilidade (Matriz Singular)!")
+    print("="*75)
+    
+    # Trava interativa solicitada pelo usuário
+    while True:
+        ativar = input("\n -> Ativar IA Preditiva (Gêmeo Digital) para recuperar o sistema? (S/N): ").strip().upper()
+        if ativar == 'S':
+            break
+        elif ativar == 'N':
+            print("\n ❌ Operação abortada. O estimador colapsou e o sistema permanecerá inobservável.")
+            return False
+        else:
+            print(" ⚠️ Opção inválida! Digite S ou N.")
+
+    print("\n" + "="*75)
     print(" 🧠 MÓDULO DE INTELIGÊNCIA ARTIFICIAL ATIVADO (MLP - DIGITAL TWIN)")
     print("="*75)
-    print(" -> [IA] Alerta: O expurgo LNR comprometeu a observabilidade (Matriz Singular)!")
     print(" -> [IA] Iniciando simulações de fluxo para treinar as Redes Neurais...\n")
     
     assistente = AssistenteMLP_DigitalTwin()

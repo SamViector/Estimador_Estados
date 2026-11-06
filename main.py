@@ -46,10 +46,11 @@ def exibir_menu_cenarios():
         print(" [B] Injetar Erros Grosseiros (Personalizado pelo Usuário)")
         print(" [C] Apagão de Dados: Simular Perda de Observabilidade Severa (Ativa a IA)")
         print(" [D] Medição Reduzida: Apenas Injeções Nodais (Sem Fluxos nas Linhas)")
-        opcao = input(" Escolha a condição de medição (A/B/C/D): ").strip().upper()
-        if opcao in ["A", "B", "C", "D"]:
+        print(" [E] Medição Reduzida + Colapso: Quebra na Barra 4 para testar IA")
+        opcao = input(" Escolha a condição de medição (A/B/C/D/E): ").strip().upper()
+        if opcao in ["A", "B", "C", "D", "E"]:
             return opcao
-        print(" ⚠️ Opção inválida! Escolha A, B, C ou D.")
+        print(" ⚠️ Opção inválida! Escolha A, B, C, D ou E.")
 
 def configurar_e_injetar_erros(net):
     """
@@ -201,6 +202,51 @@ def simular_medicao_minima_injecoes(net):
     print(f" -> [SCADA] Restam {len(net.measurement)} sensores ativos (Injeções Nodais + 1 Tensão Slack).")
     print(" -> [SISTEMA] A rede operará no seu plano mínimo de medição!")
 
+def simular_medicao_minima_com_colapso_b4(net):
+    """
+    Reduz a rede ao plano mínimo de medição e simula um APAGÃO na Barra 4.
+    A Inteligência Artificial é acionada imediatamente para salvar o sistema.
+    """
+    # Importa a função da IA para ser acionada no momento do colapso
+    from src.ia_preditiva import recuperar_observabilidade_com_ia
+    
+    print("\n" + "="*70)
+    print(" 📉💥 MODO E: MEDIÇÃO MÍNIMA + APAGÃO NA BARRA 4 (TESTE IA)")
+    print("="*70)
+    
+    indices_remover_redundancia = []
+    indices_b4 = []
+    barras_slack = net.ext_grid.bus.values
+    id_alvo = 3 # Índice interno (0-based) da Barra 4
+    
+    for idx, row in net.measurement.iterrows():
+        e_type = row['element_type']
+        m_type = row['measurement_type']
+        elem = row['element']
+        
+        # 1. Tira a redundância (Desliga fluxos de linha e tensões secundárias)
+        if e_type == "line":
+            indices_remover_redundancia.append(idx)
+        elif m_type == "v" and elem not in barras_slack:
+            indices_remover_redundancia.append(idx)
+            
+        # 2. O Apagão: Isola as injeções P e Q da Barra 4 para a IA recuperar
+        elif e_type == 'bus' and elem == id_alvo:
+            indices_b4.append(idx)
+            
+    # Salva a tabela antiga na memória para a IA saber o que foi perdido
+    medidas_antigas = net.measurement.copy()
+    
+    # Executa a limpeza apagando tudo da matriz
+    net.measurement.drop(indices_remover_redundancia + indices_b4, inplace=True)
+    
+    print(f" -> [SCADA] {len(indices_remover_redundancia)} medidores redundantes desligados.")
+    print(f" -> [SABOTAGEM] 🚨 Apagão Físico! {len(indices_b4)} sensores (P e Q) da Barra 4 caíram.")
+    
+    # === O GATILHO DA IA ===
+    # A matriz acabou de quebrar. Acionamos a sua IA aqui mesmo!
+    recuperar_observabilidade_com_ia(net, medidas_antigas, indices_b4)
+
 def executar_estimacao(net, limiar_lnr=3.5, modo_interativo=True):
     """
     Agrupa o pipeline padrão de estimação (Pré-filtro -> Observabilidade -> WLS -> Relatórios).
@@ -262,6 +308,8 @@ def main():
                 simular_apagao_dados(net)
             elif modo == "D":
                 simular_medicao_minima_injecoes(net)
+            elif modo == "E":
+                simular_medicao_minima_com_colapso_b4(net)
             else:
                 print("\n[SIMULAÇÃO] ✅ Operação em Modo Normal (sem avarias).")
 
